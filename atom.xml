@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://weijianghu.github.io</id>
+    <title>Hidea</title>
+    <updated>2022-07-28T08:03:40.238Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://weijianghu.github.io"/>
+    <link rel="self" href="https://weijianghu.github.io/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://weijianghu.github.io/images/avatar.png</logo>
+    <icon>https://weijianghu.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2022, Hidea</rights>
+    <entry>
+        <title type="html"><![CDATA[async 函数]]></title>
+        <id>https://weijianghu.github.io/post/async-han-shu/</id>
+        <link href="https://weijianghu.github.io/post/async-han-shu/">
+        </link>
+        <updated>2022-07-28T07:29:56.000Z</updated>
+        <content type="html"><![CDATA[<p>ES2017 标准引入了 async 函数，使得异步操作变得更加方便。</p>
+<p>async 函数是什么？一句话，它就是 Generator 函数的语法糖。<br>
+<strong>async函数就是将 Generator 函数的星号（*）替换成async，将yield替换成await，仅此而已。</strong><br>
+async函数对 Generator 函数的改进，体现在以下四点。</p>
+<ol>
+<li>内置执行器。</li>
+</ol>
+<p>Generator 函数的执行必须靠执行器，所以才有了co模块，而async函数自带执行器。也就是说，async函数的执行，与普通函数一模一样，只要一行。</p>
+<pre><code>asyncReadFile();
+</code></pre>
+<p>上面的代码调用了asyncReadFile函数，然后它就会自动执行，输出最后结果。这完全不像 Generator 函数，需要调用next方法，或者用co模块，才能真正执行，得到最后结果。</p>
+<ol start="2">
+<li>
+<p>更好的语义。<br>
+async和await，比起星号和yield，语义更清楚了。async表示函数里有异步操作，await表示紧跟在后面的表达式需要等待结果。</p>
+</li>
+<li>
+<p>更广的适用性。<br>
+co模块约定，yield命令后面只能是 Thunk 函数或 Promise 对象，而async函数的await命令后面，可以是 Promise 对象和原始类型的值（数值、字符串和布尔值，但这时会自动转成立即 resolved 的 Promise 对象）。</p>
+</li>
+<li>
+<p>返回值是 Promise。<br>
+async函数的返回值是 Promise 对象，这比 Generator 函数的返回值是 Iterator 对象方便多了。你可以用then方法指定下一步的操作。</p>
+</li>
+</ol>
+<p>进一步说，async函数完全可以看作多个异步操作，包装成的一个 Promise 对象，而await命令就是内部then命令的语法糖。</p>
+<h3 id="基本用法"><strong>基本用法</strong></h3>
+<p>async函数返回一个 Promise 对象，可以使用then方法添加回调函数。当函数执行的时候，一旦遇到await就会先返回，等到异步操作完成，再接着执行函数体内后面的语句。</p>
+<p>下面是一个例子。</p>
+<pre><code>async function getStockPriceByName(name) {
+  const symbol = await getStockSymbol(name);
+  const stockPrice = await getStockPrice(symbol);
+  return stockPrice;
+}
+
+getStockPriceByName('goog').then(function (result) {
+  console.log(result);
+});
+</code></pre>
+<h3 id="语法">语法</h3>
+<p>async函数的语法规则总体上比较简单，难点是错误处理机制。</p>
+<h4 id="返回promise对象">返回promise对象</h4>
+<p>async函数返回一个 Promise 对象。</p>
+<p>async函数内部return语句返回的值，会成为then方法回调函数的参数。</p>
+<pre><code>async function f() {
+  return 'hello world';
+}
+
+f().then(v =&gt; console.log(v))
+// &quot;hello world&quot;
+</code></pre>
+<p>上面代码中，函数f内部return命令返回的值，会被then方法回调函数接收到。</p>
+<p>async函数内部抛出错误，会导致返回的 Promise 对象变为reject状态。抛出的错误对象会被catch方法回调函数接收到。</p>
+<pre><code>async function f() {
+  throw new Error('出错了');
+}
+
+f().then(
+  v =&gt; console.log('resolve', v),
+  e =&gt; console.log('reject', e)
+)
+//reject Error: 出错了
+</code></pre>
+<h3 id="promise对象的状态变化">promise对象的状态变化</h3>
+<p>async函数返回的 Promise 对象，必须等到内部所有await命令后面的 Promise 对象执行完，才会发生状态改变，除非遇到return语句或者抛出错误。也就是说，只有async函数内部的异步操作执行完，才会执行then方法指定的回调函数。</p>
+<pre><code>async function getTitle(url) {
+  let response = await fetch(url);
+  let html = await response.text();
+  return html.match(/&lt;title&gt;([\s\S]+)&lt;\/title&gt;/i)[1];
+}
+getTitle('https://tc39.github.io/ecma262/').then(console.log)
+// &quot;ECMAScript 2017 Language Specification&quot;
+</code></pre>
+<p>上面代码中，函数getTitle内部有三个操作：抓取网页、取出文本、匹配页面标题。只有这三个操作全部完成，才会执行then方法里面的console.log。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[协程说明]]></title>
+        <id>https://weijianghu.github.io/post/xie-cheng-shuo-ming/</id>
+        <link href="https://weijianghu.github.io/post/xie-cheng-shuo-ming/">
+        </link>
+        <updated>2022-07-28T07:09:39.000Z</updated>
+        <content type="html"><![CDATA[<p>协程有点像函数，又有点像线程。它的运行流程大致如下。</p>
+<p>第一步，协程A开始执行。<br>
+第二步，协程A执行到一半，进入暂停，执行权转移到协程B。<br>
+第三步，（一段时间后）协程B交还执行权。<br>
+第四步，协程A恢复执行。<br>
+上面流程的协程A，就是异步任务，因为它分成两段（或多段）执行</p>
+<p>举例来说，读取文件的协程写法如下。</p>
+<pre><code>function* asyncJob() {
+  // ...其他代码
+  var f = yield readFile(fileA);
+  // ...其他代码
+}
+</code></pre>
+<p>上面代码的函数asyncJob是一个协程，它的奥妙就在其中的yield命令。它表示执行到此处，执行权将交给其他协程。也就是说，yield命令是异步两个阶段的分界线。</p>
+<p>协程遇到yield命令就暂停，等到执行权返回，再从暂停的地方继续往后执行。它的最大优点，就是代码的写法非常像同步操作，如果去除yield命令，简直一模一样。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[es6-Generator说明]]></title>
+        <id>https://weijianghu.github.io/post/es6-generator-shuo-ming/</id>
+        <link href="https://weijianghu.github.io/post/es6-generator-shuo-ming/">
+        </link>
+        <updated>2022-07-28T06:32:53.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="定义"><strong>定义</strong></h3>
+<p>执行 Generator 函数会返回一个遍历器对象，也就是说，Generator 函数除了状态机，还是一个遍历器对象生成函数。返回的遍历器对象，可以依次遍历 Generator 函数内部的每一个状态。</p>
+<p>形式上，Generator 函数是一个普通函数，但是有两个特征。一是，function关键字与函数名之间有一个星号；二是，函数体内部使用yield表达式，定义不同的内部状态（yield在英语里的意思就是“产出”）。</p>
+<pre><code>function* helloWorldGenerator() {
+  yield 'hello';
+  yield 'world';
+  return 'ending';
+}
+
+var hw = helloWorldGenerator();
+</code></pre>
+<p>上面代码定义了一个 Generator 函数helloWorldGenerator，它内部有两个yield表达式（hello和world），即该函数有三个状态：hello，world 和 return 语句（结束执行）。</p>
+<p>然后，Generator 函数的调用方法与普通函数一样，也是在函数名后面加上一对圆括号。不同的是，调用 Generator 函数后，该函数并不执行，返回的也不是函数运行结果，而是一个指向内部状态的指针对象，也就是上一章介绍的遍历器对象（Iterator Object）。</p>
+<p>下一步，必须调用遍历器对象的next方法，使得指针移向下一个状态。也就是说，每次调用next方法，内部指针就从函数头部或上一次停下来的地方开始执行，直到遇到下一个yield表达式（或return语句）为止。换言之，Generator 函数是分段执行的，yield表达式是暂停执行的标记，而next方法可以恢复执行</p>
+<pre><code>hw.next()
+// { value: 'hello', done: false }
+
+hw.next()
+// { value: 'world', done: false }
+
+hw.next()
+// { value: 'ending', done: true }
+
+hw.next()
+// { value: undefined, done: true }
+</code></pre>
+<p>上面代码一共调用了四次next方法。</p>
+<p>第一次调用，Generator 函数开始执行，直到遇到第一个yield表达式为止。next方法返回一个对象，它的value属性就是当前yield表达式的值hello，done属性的值false，表示遍历还没有结束。</p>
+<p>第二次调用，Generator 函数从上次yield表达式停下的地方，一直执行到下一个yield表达式。next方法返回的对象的value属性就是当前yield表达式的值world，done属性的值false，表示遍历还没有结束。</p>
+<p>第三次调用，Generator 函数从上次yield表达式停下的地方，一直执行到return语句（如果没有return语句，就执行到函数结束）。next方法返回的对象的value属性，就是紧跟在return语句后面的表达式的值（如果没有return语句，则value属性的值为undefined），done属性的值true，表示遍历已经结束。</p>
+<p>第四次调用，此时 Generator 函数已经运行完毕，next方法返回对象的value属性为undefined，done属性为true。以后再调用next方法，返回的都是这个值。</p>
+<p>总结一下，调用 Generator 函数，返回一个遍历器对象，代表 Generator 函数的内部指针。以后，每次调用遍历器对象的next方法，就会返回一个有着value和done两个属性的对象。value属性表示当前的内部状态的值，是yield表达式后面那个表达式的值；done属性是一个布尔值，表示是否遍历结束</p>
+<p><strong>另外需要注意，yield表达式只能用在 Generator 函数里面，用在其他地方都会报错。</strong></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[markdown语法]]></title>
+        <id>https://weijianghu.github.io/post/markdown-yu-fa/</id>
+        <link href="https://weijianghu.github.io/post/markdown-yu-fa/">
+        </link>
+        <updated>2022-07-28T03:05:55.000Z</updated>
+        <content type="html"><![CDATA[<p><a href="https://markdown.com.cn/cheat-sheet.html#%E5%9F%BA%E6%9C%AC%E8%AF%AD%E6%B3%95">查看语法</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[es6-let,const说明]]></title>
+        <id>https://weijianghu.github.io/post/es6-letconst-shuo-ming/</id>
+        <link href="https://weijianghu.github.io/post/es6-letconst-shuo-ming/">
+        </link>
+        <updated>2022-07-28T02:43:30.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="let说明"><strong>let说明</strong></h3>
+<ul>
+<li>let不存在代码提升，必须先声明后使用</li>
+<li>let有自己的作用域，在作用域之外，此变量无法使用，父级作用域中声明的let同名变量不受子作用域声明的let变量影响</li>
+<li>let变量在同一个作用域内不能重复声明</li>
+</ul>
+<hr>
+<h3 id="const说明"><strong>const说明</strong></h3>
+<ul>
+<li>const声明一个只读的常量。一旦声明，常量的值就不能改变</li>
+<li>const声明的变量不得改变值，这意味着，const一旦声明变量，就必须立即初始化，不能留到以后赋值。</li>
+<li>const的作用域与let命令相同：只在声明所在的块级作用域内有效。</li>
+<li>const命令声明的常量也是不提升，同样存在暂时性死区，只能在声明的位置后面使用。</li>
+<li>const声明的常量，也与let一样不可重复声明。</li>
+</ul>
+<h4 id="const本质"><strong>const本质</strong></h4>
+<p>const实际上保证的，并不是变量的值不得改动，而是变量指向的那个内存地址所保存的数据不得改动。对于简单类型的数据（数值、字符串、布尔值），值就保存在变量指向的那个内存地址，因此等同于常量。但对于复合类型的数据（主要是对象和数组），变量指向的内存地址，保存的只是一个指向实际数据的指针，const只能保证这个指针是固定的（即总是指向另一个固定的地址），至于它指向的数据结构是不是可变的，就完全不能控制了。因此，将一个对象声明为常量必须非常小心。</p>
+<pre><code>const foo = {};
+
+// 为 foo 添加一个属性，可以成功
+foo.prop = 123;
+foo.prop // 123
+
+// 将 foo 指向另一个对象，就会报错
+foo = {}; // TypeError: &quot;foo&quot; is read-only
+</code></pre>
+<p>上面代码中，常量foo储存的是一个地址，这个地址指向一个对象。不可变的只是这个地址，即不能把foo指向另一个地址，但对象本身是可变的，所以依然可以为其添加新属性。</p>
+<p>下面是另一个例子。</p>
+<pre><code>const a = [];
+a.push('Hello'); // 可执行
+a.length = 0;    // 可执行
+a = ['Dave'];    // 报错
+</code></pre>
+<p>上面代码中，常量a是一个数组，这个数组本身是可写的，但是如果将另一个数组赋值给a，就会报错。</p>
+<p>如果真的想将对象冻结，应该使用Object.freeze方法。</p>
+<pre><code>const foo = Object.freeze({});
+
+// 常规模式时，下面一行不起作用；
+// 严格模式时，该行会报错
+foo.prop = 123;
+</code></pre>
+<p>上面代码中，常量foo指向一个冻结的对象，所以添加新属性不起作用，严格模式时还会报错。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[内容居中]]></title>
+        <id>https://weijianghu.github.io/post/nei-rong-ju-zhong/</id>
+        <link href="https://weijianghu.github.io/post/nei-rong-ju-zhong/">
+        </link>
+        <updated>2022-07-27T07:42:02.000Z</updated>
+        <content type="html"><![CDATA[<pre><code>.dwGroup li {
+	width: 18%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* display: inline-block; */
+	font-size: 14px;
+	margin: 15px 2.5% 0 0;
+	text-align: justify;
+	background-color: #0469e0;
+	padding: 0px 10px;
+	height: 50px;
+	border-radius: 10px;
+	text-align: center;
+}
+</code></pre>
+]]></content>
+    </entry>
+</feed>
