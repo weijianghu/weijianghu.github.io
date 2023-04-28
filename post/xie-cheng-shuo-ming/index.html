@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>协程说明 | Hidea</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://weijianghu.github.io/favicon.ico?v=1682672380349">
+<link rel="stylesheet" href="https://weijianghu.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="协程有点像函数，又有点像线程。它的运行流程大致如下。
+第一步，协程A开始执行。
+第二步，协程A执行到一半，进入暂停，执行权转移到协程B。
+第三步，（一段时间后）协程B交还执行权。
+第四步，协程A恢复执行。
+上面流程的协程A，就是异步任务，因..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://weijianghu.github.io">
+        <img src="https://weijianghu.github.io/images/avatar.png?v=1682672380349" class="site-logo">
+        <h1 class="site-title">Hidea</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      温故而知新
+    </div>
+    <div class="site-footer">
+      Powered by weijianghu | <a class="rss" href="https://weijianghu.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">协程说明</h2>
+            <div class="post-date">2022-07-28</div>
+            
+            <div class="post-content" v-pre>
+              <p>协程有点像函数，又有点像线程。它的运行流程大致如下。</p>
+<p>第一步，协程A开始执行。<br>
+第二步，协程A执行到一半，进入暂停，执行权转移到协程B。<br>
+第三步，（一段时间后）协程B交还执行权。<br>
+第四步，协程A恢复执行。<br>
+上面流程的协程A，就是异步任务，因为它分成两段（或多段）执行</p>
+<p>举例来说，读取文件的协程写法如下。</p>
+<pre><code>function* asyncJob() {
+  // ...其他代码
+  var f = yield readFile(fileA);
+  // ...其他代码
+}
+</code></pre>
+<p>上面代码的函数asyncJob是一个协程，它的奥妙就在其中的yield命令。它表示执行到此处，执行权将交给其他协程。也就是说，yield命令是异步两个阶段的分界线。</p>
+<p>协程遇到yield命令就暂停，等到执行权返回，再从暂停的地方继续往后执行。它的最大优点，就是代码的写法非常像同步操作，如果去除yield命令，简直一模一样。</p>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://weijianghu.github.io/post/es6-generator-shuo-ming/">
+                  <h3 class="post-title">
+                    es6-Generator说明
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>

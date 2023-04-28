@@ -1,0 +1,905 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://weijianghu.github.io</id>
+    <title>Hidea</title>
+    <updated>2023-04-28T09:01:30.702Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://weijianghu.github.io"/>
+    <link rel="self" href="https://weijianghu.github.io/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://weijianghu.github.io/images/avatar.png</logo>
+    <icon>https://weijianghu.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2023, Hidea</rights>
+    <entry>
+        <title type="html"><![CDATA[php中jwt使用过程]]></title>
+        <id>https://weijianghu.github.io/post/php-zhong-jwt-shi-yong-guo-cheng/</id>
+        <link href="https://weijianghu.github.io/post/php-zhong-jwt-shi-yong-guo-cheng/">
+        </link>
+        <updated>2022-08-17T02:33:48.000Z</updated>
+        <content type="html"><![CDATA[<p>整体使用流程：</p>
+<ol>
+<li>
+<h3 id="用户登录"><strong>用户登录</strong></h3>
+</li>
+<li>
+<h3 id="后端通过jwt生成此用户的token"><strong>后端通过jwt生成此用户的token</strong></h3>
+</li>
+<li>
+<h3 id="回传token到前端"><strong>回传token到前端</strong></h3>
+</li>
+<li>
+<h3 id="前端存储token"><strong>前端存储token</strong></h3>
+</li>
+<li>
+<h3 id="每次前端到后端的请求都要带着此token可以指定前置路由中间件判断"><strong>每次前端到后端的请求都要带着此token,可以指定前置路由中间件判断</strong></h3>
+</li>
+<li>
+<h3 id="后端验证前端带过来的token如果合法就继续如果不合法报错"><strong>后端验证前端带过来的token，如果合法，就继续，如果不合法，报错</strong></h3>
+</li>
+</ol>
+<p>先说一下jwt的基本知识<br>
+<img src="https://picabstract-preview-ftn.weiyun.com/ftn_pic_abs_v3/0affd67b4e4214028adb1d91862ca06c567e626ccd8fda2f4a8a172f8b794af9ecf022dc10d4cc3a9f65b274b5efed92?pictype=scale&amp;from=30113&amp;version=3.3.3.3&amp;fname=FireShot%20Capture%20004%20-%20JSON%20Web%20Token%20%E5%85%A5%E9%97%A8%E6%95%99%E7%A8%8B%20-%20%E9%98%AE%E4%B8%80%E5%B3%B0%E7%9A%84%E7%BD%91%E7%BB%9C%E6%97%A5%E5%BF%97%20-%20www.ruanyifeng.com.png&amp;size=750" alt="" loading="lazy"></p>
+<p>下面详细讲解一下使用过程(实例以thinkphp6.0作为基本框架)</p>
+<h3 id="文件列表"><strong>文件列表</strong></h3>
+<ol>
+<li>JwtAuthModelTrait.php #负责生成和解析用户的jwt</li>
+<li>UserToken.php #负责把1中生成的token存储到数据库等操作</li>
+<li>AuthTokenMiddleware #中间件，用来判断token有效性</li>
+<li>UserRepository.php #辅助类，用来协助3，判断token有效性</li>
+</ol>
+<p>代码如下：</p>
+<pre><code>JwtAuthModelTrait.php
+&lt;?php
+namespace crmeb\traits;
+
+use Firebase\JWT\BeforeValidException;
+use Firebase\JWT\ExpiredException;
+use Firebase\JWT\JWT;
+use Firebase\JWT\SignatureInvalidException;
+use think\facade\Config;
+use UnexpectedValueException;
+
+trait JwtAuthModelTrait
+{
+    /**
+     * @param string $type
+     * @param array $params
+     * @return array
+     */
+    public function getToken(string $type, array $params = []): array
+    {
+        $id = $this-&gt;{$this-&gt;getPk()};
+        $host = app()-&gt;request-&gt;host();
+        $time = time();
+
+        $params += [
+            'iss' =&gt; $host,
+            'aud' =&gt; $host,
+            'iat' =&gt; $time,
+            'nbf' =&gt; $time,
+            'exp' =&gt; strtotime('+ 30day'),
+        ];
+        $params['jti'] = compact('id', 'type');
+        $token = JWT::encode($params, Config::get('app.app_key', 'default'));
+
+        return compact('token', 'params');
+    }
+
+    /**
+     * @param string $jwt
+     * @return array
+     *
+     * @throws UnexpectedValueException     Provided JWT was invalid
+     * @throws SignatureInvalidException    Provided JWT was invalid because the signature verification failed
+     * @throws BeforeValidException         Provided JWT is trying to be used before it's eligible as defined by 'nbf'
+     * @throws BeforeValidException         Provided JWT is trying to be used before it's been created as defined by 'iat'
+     * @throws ExpiredException             Provided JWT has since expired, as defined by the 'exp' claim
+     *
+     */
+    public static function parseToken(string $jwt): array
+    {
+        JWT::$leeway = 60;
+
+        $data = JWT::decode($jwt, Config::get('app.app_key', 'default'), array('HS256'));
+
+        $model = new self();
+        return [$model-&gt;where($model-&gt;getPk(), $data-&gt;jti-&gt;id)-&gt;find(), $data-&gt;jti-&gt;type];
+    }
+}
+</code></pre>
+<pre><code>UserToken.php
+&lt;?php
+
+
+namespace app\models\user;
+
+
+use think\Model;
+
+class UserToken extends Model
+{
+    protected $name = 'user_token';
+
+    protected $type = [
+        'create_time' =&gt; 'datetime',
+        'login_ip' =&gt; 'string'
+    ];
+
+    protected $autoWriteTimestamp = true;
+
+    protected $updateTime = false;
+
+    public static function onBeforeInsert(UserToken $token)
+    {
+        if (!isset($token['login_ip']))
+            $token['login_ip'] = app()-&gt;request-&gt;ip();
+    }
+
+    /**
+     * 创建token并且保存
+     * @param User $user
+     * @param $type
+     * @return UserToken
+     */
+    public static function createToken(User $user, $type): self
+    {
+        $tokenInfo = $user-&gt;getToken($type);
+        return self::create([
+            'uid' =&gt; $user-&gt;uid,
+            'token' =&gt; $tokenInfo['token'],
+            'expires_time' =&gt; date('Y-m-d H:i:s', $tokenInfo['params']['exp'])
+        ]);
+    }
+
+    /**
+     * 删除一天前的过期token
+     * @return bool
+     * @throws \Exception
+     */
+    public static function delToken()
+    {
+        return self::where('expires_time', '&lt;', date('Y-m-d H:i:s',strtotime('-1 day')))-&gt;delete();
+    }
+}
+</code></pre>
+<pre><code>AuthTokenMiddleware.php
+&lt;?php
+
+
+namespace app\http\middleware;
+
+
+use app\models\user\User;
+use app\models\user\UserToken;
+use app\Request;
+use crmeb\exceptions\AuthException;
+use crmeb\interfaces\MiddlewareInterface;
+use crmeb\repositories\UserRepository;
+use think\db\exception\DataNotFoundException;
+use think\db\exception\ModelNotFoundException;
+use think\exception\DbException;
+
+/**
+ * token验证中间件
+ * Class AuthTokenMiddleware
+ * @package app\http\middleware
+ */
+class AuthTokenMiddleware implements MiddlewareInterface
+{
+    public function handle(Request $request, \Closure $next, bool $force = true)
+    {
+        $authInfo = null;
+        $token = trim(ltrim($request-&gt;header('Authori-zation'), 'Bearer'));
+        if(!$token)  $token = trim(ltrim($request-&gt;header('Authorization'), 'Bearer'));//正式版，删除此行，某些服务器无法获取到token调整为 Authori-zation
+        try {
+            $authInfo = UserRepository::parseToken($token);
+        } catch (AuthException $e) {
+            if ($force)
+                return app('json')-&gt;make($e-&gt;getCode(), $e-&gt;getMessage());
+        }
+
+        if (!is_null($authInfo)) {
+            Request::macro('user', function () use (&amp;$authInfo) {
+                return $authInfo['user'];
+            });
+            Request::macro('tokenData', function () use (&amp;$authInfo) {
+                return $authInfo['tokenData'];
+            });
+        }
+        Request::macro('isLogin', function () use (&amp;$authInfo) {
+            return !is_null($authInfo);
+        });
+        Request::macro('uid', function () use (&amp;$authInfo) {
+            return is_null($authInfo) ? 0 : $authInfo['user']-&gt;uid;
+        });
+
+        return $next($request);
+    }
+}
+</code></pre>
+<pre><code>&lt;?php
+UserRepository.php
+namespace crmeb\repositories;
+
+use app\admin\model\system\SystemAttachment;
+use app\models\user\User;
+use app\models\user\UserAddress;
+use app\models\user\UserToken;
+use crmeb\exceptions\AuthException;
+use think\db\exception\ModelNotFoundException;
+use think\db\exception\DataNotFoundException;
+use think\exception\DbException;
+
+/**
+ * Class UserRepository
+ * @package crmeb\repositories
+ */
+class UserRepository
+{
+    /**
+     * 获取授权信息
+     * @param string $token
+     * @return array
+     * @throws AuthException
+     * @throws DataNotFoundException
+     * @throws DbException
+     * @throws ModelNotFoundException
+     */
+    public static function parseToken($token): array
+    {
+        if (!$token || !$tokenData = UserToken::where('token', $token)-&gt;find())
+            throw new AuthException('请登录', 410000);
+        try {
+            [$user, $type] = User::parseToken($token);
+        } catch (\Throwable $e) {
+            $tokenData-&gt;delete();
+            throw new AuthException('登录已过期,请重新登录', 410001);
+        }
+
+        if (!$user || $user-&gt;uid != $tokenData-&gt;uid) {
+            $tokenData-&gt;delete();
+            throw new AuthException('登录状态有误,请重新登录', 410002);
+        }
+        $tokenData-&gt;type = $type;
+        return compact('user', 'tokenData');
+    }
+}
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[跨域资源共享 CORS 详解]]></title>
+        <id>https://weijianghu.github.io/post/kua-yu-zi-yuan-gong-xiang-cors-xiang-jie/</id>
+        <link href="https://weijianghu.github.io/post/kua-yu-zi-yuan-gong-xiang-cors-xiang-jie/">
+        </link>
+        <updated>2022-08-04T08:29:25.000Z</updated>
+        <content type="html"><![CDATA[<p>CORS是一个W3C标准，全称是&quot;跨域资源共享&quot;（Cross-origin resource sharing）。</p>
+<p>它允许浏览器向跨源服务器，发出XMLHttpRequest请求，从而克服了AJAX只能同源使用的限制。</p>
+<p>本文详细介绍CORS的内部机制。</p>
+<h3 id="一-简介"><strong>一、简介</strong></h3>
+<p>CORS需要浏览器和服务器同时支持。目前，所有浏览器都支持该功能，IE浏览器不能低于IE10。</p>
+<p>整个CORS通信过程，都是浏览器自动完成，不需要用户参与。对于开发者来说，CORS通信与同源的AJAX通信没有差别，代码完全一样。浏览器一旦发现AJAX请求跨源，就会自动添加一些附加的头信息，有时还会多出一次附加的请求，但用户不会有感觉。</p>
+<p>因此，实现CORS通信的关键是服务器。只要服务器实现了CORS接口，就可以跨源通信。</p>
+<h3 id="二-两种请求"><strong>二、两种请求</strong></h3>
+<p>浏览器将CORS请求分成两类：简单请求（simple request）和非简单请求（not-so-simple request）。</p>
+<p>只要同时满足以下两大条件，就属于简单请求。</p>
+<pre><code>1) 请求方法是以下三种方法之一：
+
+HEAD
+GET
+POST
+（2）HTTP的头信息不超出以下几种字段：
+
+Accept
+Accept-Language
+Content-Language
+Last-Event-ID
+Content-Type：只限于三个值application/x-www-form-urlencoded、multipart/form-data、text/plain
+</code></pre>
+<p>这是为了兼容表单（form），因为历史上表单一直可以发出跨域请求。AJAX 的跨域设计就是，只要表单可以发，AJAX 就可以直接发。</p>
+<p>凡是不同时满足上面两个条件，就属于非简单请求。</p>
+<p>浏览器对这两种请求的处理，是不一样的。</p>
+<h3 id="三-简单请求"><strong>三、简单请求</strong></h3>
+<h4 id="31-基本流程"><strong>3.1 基本流程</strong></h4>
+<p>对于简单请求，浏览器直接发出CORS请求。具体来说，就是在头信息之中，增加一个Origin字段。</p>
+<p>下面是一个例子，浏览器发现这次跨源AJAX请求是简单请求，就自动在头信息之中，添加一个Origin字段。</p>
+<pre><code>GET /cors HTTP/1.1
+Origin: http://api.bob.com
+Host: api.alice.com
+Accept-Language: en-US
+Connection: keep-alive
+User-Agent: Mozilla/5.0...
+</code></pre>
+<p>上面的头信息中，Origin字段用来说明，本次请求来自哪个源（协议 + 域名 + 端口）。服务器根据这个值，决定是否同意这次请求。</p>
+<p>如果Origin指定的源，不在许可范围内，服务器会返回一个正常的HTTP回应。浏览器发现，这个回应的头信息没有包含Access-Control-Allow-Origin字段（详见下文），就知道出错了，从而抛出一个错误，被XMLHttpRequest的onerror回调函数捕获。注意，这种错误无法通过状态码识别，因为HTTP回应的状态码有可能是200。</p>
+<p>如果Origin指定的域名在许可范围内，服务器返回的响应，会多出几个头信息字段。</p>
+<pre><code>Access-Control-Allow-Origin: http://api.bob.com
+Access-Control-Allow-Credentials: true
+Access-Control-Expose-Headers: FooBar
+Content-Type: text/html; charset=utf-8
+</code></pre>
+<p>上面的头信息之中，有三个与CORS请求相关的字段，都以Access-Control-开头。</p>
+<h5 id="1access-control-allow-origin"><strong>（1）Access-Control-Allow-Origin</strong></h5>
+<p>该字段是必须的。它的值要么是请求时Origin字段的值，要么是一个*，表示接受任意域名的请求。</p>
+<h5 id="2access-control-allow-credentials"><strong>（2）Access-Control-Allow-Credentials</strong></h5>
+<p>该字段可选。它的值是一个布尔值，表示是否允许发送Cookie。默认情况下，Cookie不包括在CORS请求之中。设为true，即表示服务器明确许可，Cookie可以包含在请求中，一起发给服务器。这个值也只能设为true，如果服务器不要浏览器发送Cookie，删除该字段即可。</p>
+<h5 id="3access-control-expose-headers"><strong>（3）Access-Control-Expose-Headers</strong></h5>
+<p>该字段可选。CORS请求时，XMLHttpRequest对象的getResponseHeader()方法只能拿到6个基本字段：Cache-Control、Content-Language、Content-Type、Expires、Last-Modified、Pragma。如果想拿到其他字段，就必须在Access-Control-Expose-Headers里面指定。上面的例子指定，getResponseHeader('FooBar')可以返回FooBar字段的值。</p>
+<h4 id="32-withcredentials-属性"><strong>3.2 withCredentials 属性</strong></h4>
+<p>上面说到，CORS请求默认不发送Cookie和HTTP认证信息。如果要把Cookie发到服务器，一方面要服务器同意，指定Access-Control-Allow-Credentials字段。</p>
+<pre><code>Access-Control-Allow-Credentials: true
+</code></pre>
+<p>另一方面，开发者必须在AJAX请求中打开withCredentials属性。</p>
+<pre><code>var xhr = new XMLHttpRequest();
+xhr.withCredentials = true;
+</code></pre>
+<p>否则，即使服务器同意发送Cookie，浏览器也不会发送。或者，服务器要求设置Cookie，浏览器也不会处理。</p>
+<p>但是，如果省略withCredentials设置，有的浏览器还是会一起发送Cookie。这时，可以显式关闭withCredentials。</p>
+<pre><code>xhr.withCredentials = false;
+</code></pre>
+<p>需要注意的是，如果要发送Cookie，Access-Control-Allow-Origin就不能设为星号，必须指定明确的、与请求网页一致的域名。同时，Cookie依然遵循同源政策，只有用服务器域名设置的Cookie才会上传，其他域名的Cookie并不会上传，且（跨源）原网页代码中的document.cookie也无法读取服务器域名下的Cookie。</p>
+<h3 id="四-非简单请求"><strong>四、非简单请求</strong></h3>
+<h4 id="41-预检请求"><strong>4.1 预检请求</strong></h4>
+<p>非简单请求是那种对服务器有特殊要求的请求，比如请求方法是PUT或DELETE，或者Content-Type字段的类型是application/json。</p>
+<p>非简单请求的CORS请求，会在正式通信之前，增加一次HTTP查询请求，称为&quot;预检&quot;请求（preflight）。</p>
+<p>浏览器先询问服务器，当前网页所在的域名是否在服务器的许可名单之中，以及可以使用哪些HTTP动词和头信息字段。只有得到肯定答复，浏览器才会发出正式的XMLHttpRequest请求，否则就报错。</p>
+<p>下面是一段浏览器的JavaScript脚本。</p>
+<pre><code>var url = 'http://api.alice.com/cors';
+var xhr = new XMLHttpRequest();
+xhr.open('PUT', url, true);
+xhr.setRequestHeader('X-Custom-Header', 'value');
+xhr.send();
+
+</code></pre>
+<p>上面代码中，HTTP请求的方法是PUT，并且发送一个自定义头信息X-Custom-Header。</p>
+<p>浏览器发现，这是一个非简单请求，就自动发出一个&quot;预检&quot;请求，要求服务器确认可以这样请求。下面是这个&quot;预检&quot;请求的HTTP头信息。</p>
+<pre><code>OPTIONS /cors HTTP/1.1
+Origin: http://api.bob.com
+Access-Control-Request-Method: PUT
+Access-Control-Request-Headers: X-Custom-Header
+Host: api.alice.com
+Accept-Language: en-US
+Connection: keep-alive
+User-Agent: Mozilla/5.0...
+</code></pre>
+<p>&quot;预检&quot;请求用的请求方法是OPTIONS，表示这个请求是用来询问的。头信息里面，关键字段是Origin，表示请求来自哪个源。</p>
+<p>除了Origin字段，&quot;预检&quot;请求的头信息包括两个特殊字段。</p>
+<h6 id="1access-control-request-method"><strong>（1）Access-Control-Request-Method</strong></h6>
+<p>该字段是必须的，用来列出浏览器的CORS请求会用到哪些HTTP方法，上例是PUT。</p>
+<h5 id="2access-control-request-headers"><strong>（2）Access-Control-Request-Headers</strong></h5>
+<p>该字段是一个逗号分隔的字符串，指定浏览器CORS请求会额外发送的头信息字段，上例是X-Custom-Header。</p>
+<h4 id="42-预检请求的回应"><strong>4.2 预检请求的回应</strong></h4>
+<p>服务器收到&quot;预检&quot;请求以后，检查了Origin、Access-Control-Request-Method和Access-Control-Request-Headers字段以后，确认允许跨源请求，就可以做出回应。</p>
+<pre><code>HTTP/1.1 200 OK
+Date: Mon, 01 Dec 2008 01:15:39 GMT
+Server: Apache/2.0.61 (Unix)
+Access-Control-Allow-Origin: http://api.bob.com
+Access-Control-Allow-Methods: GET, POST, PUT
+Access-Control-Allow-Headers: X-Custom-Header
+Content-Type: text/html; charset=utf-8
+Content-Encoding: gzip
+Content-Length: 0
+Keep-Alive: timeout=2, max=100
+Connection: Keep-Alive
+Content-Type: text/plain
+</code></pre>
+<p>上面的HTTP回应中，关键的是Access-Control-Allow-Origin字段，表示http://api.bob.com可以请求数据。该字段也可以设为星号，表示同意任意跨源请求。</p>
+<pre><code>Access-Control-Allow-Origin: *
+</code></pre>
+<p>如果服务器否定了&quot;预检&quot;请求，会返回一个正常的HTTP回应，但是没有任何CORS相关的头信息字段。这时，浏览器就会认定，服务器不同意预检请求，因此触发一个错误，被XMLHttpRequest对象的onerror回调函数捕获。控制台会打印出如下的报错信息。</p>
+<pre><code>MLHttpRequest cannot load http://api.alice.com.
+Origin http://api.bob.com is not allowed by Access-Control-Allow-Origin.
+</code></pre>
+<p>服务器回应的其他CORS相关字段如下。</p>
+<pre><code>Access-Control-Allow-Methods: GET, POST, PUT
+Access-Control-Allow-Headers: X-Custom-Header
+Access-Control-Allow-Credentials: true
+Access-Control-Max-Age: 1728000
+</code></pre>
+<h5 id="1access-control-allow-methods"><strong>（1）Access-Control-Allow-Methods</strong></h5>
+<p>该字段必需，它的值是逗号分隔的一个字符串，表明服务器支持的所有跨域请求的方法。注意，返回的是所有支持的方法，而不单是浏览器请求的那个方法。这是为了避免多次&quot;预检&quot;请求。</p>
+<h5 id="2access-control-allow-headers"><strong>（2）Access-Control-Allow-Headers</strong></h5>
+<p>如果浏览器请求包括Access-Control-Request-Headers字段，则Access-Control-Allow-Headers字段是必需的。它也是一个逗号分隔的字符串，表明服务器支持的所有头信息字段，不限于浏览器在&quot;预检&quot;中请求的字段。</p>
+<h5 id="3access-control-allow-credentials"><strong>（3）Access-Control-Allow-Credentials</strong></h5>
+<p>该字段与简单请求时的含义相同。</p>
+<h5 id="4access-control-max-age"><strong>（4）Access-Control-Max-Age</strong></h5>
+<p>该字段可选，用来指定本次预检请求的有效期，单位为秒。上面结果中，有效期是20天（1728000秒），即允许缓存该条回应1728000秒（即20天），在此期间，不用发出另一条预检请求。</p>
+<h4 id="43-浏览器的正常请求和回应"><strong>4.3 浏览器的正常请求和回应</strong></h4>
+<p>一旦服务器通过了&quot;预检&quot;请求，以后每次浏览器正常的CORS请求，就都跟简单请求一样，会有一个Origin头信息字段。服务器的回应，也都会有一个Access-Control-Allow-Origin头信息字段。</p>
+<p>下面是&quot;预检&quot;请求之后，浏览器的正常CORS请求。</p>
+<pre><code>PUT /cors HTTP/1.1
+Origin: http://api.bob.com
+Host: api.alice.com
+X-Custom-Header: value
+Accept-Language: en-US
+Connection: keep-alive
+User-Agent: Mozilla/5.0...
+</code></pre>
+<p>上面头信息的Origin字段是浏览器自动添加的。</p>
+<p>下面是服务器正常的回应。</p>
+<pre><code>Access-Control-Allow-Origin: http://api.bob.com
+Content-Type: text/html; charset=utf-8
+</code></pre>
+<p>上面头信息中，Access-Control-Allow-Origin字段是每次回应都必定包含的。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[ArrayAccess 使用详解和实现配置化程序]]></title>
+        <id>https://weijianghu.github.io/post/arrayaccess-shi-yong-xiang-jie-he-shi-xian-pei-zhi-hua-cheng-xu/</id>
+        <link href="https://weijianghu.github.io/post/arrayaccess-shi-yong-xiang-jie-he-shi-xian-pei-zhi-hua-cheng-xu/">
+        </link>
+        <updated>2022-08-04T02:33:42.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="简介"><strong>简介</strong></h3>
+<p>ArrayAccess（数组式访问）接口：提供像访问数组一样访问对象的能力的接口。</p>
+<h4 id="提供接口"><strong>提供接口</strong></h4>
+<pre><code>ArrayAccess {
+    //检查一个偏移位置是否存在
+    abstract public boolean offsetExists ( mixed $offset );
+
+    //获取一个偏移位置的值
+    abstract public mixed offsetGet ( mixed $offset );
+
+    //设置一个偏移位置的值
+    abstract public void offsetSet ( mixed $offset , mixed $value );
+
+    //复位一个偏移位置的值
+    abstract public void offsetUnset ( mixed $offset );
+}
+</code></pre>
+<p><strong>如果我们想像数组一样来访问你的 PHP 对象只需要实现 ArrayAccess 接口即可</strong></p>
+<h3 id="实例运用"><strong>实例运用</strong></h3>
+<p>场景：假如我有一个 User 类，映射的是用户的信息，想通过数组的方式来访问和设置用户信息</p>
+<pre><code>&lt;?php
+/**
+ * Created by PhpStorm.
+ * User: moell
+ * Date: 16-10-30
+ * Time: 下午8:49
+ */
+
+namespace User;
+
+class User implements \ArrayAccess
+{
+    private $data = [];
+
+    public function __construct()
+    {
+        $this-&gt;data =  [
+            'name' =&gt; 'moell',
+            'sex' =&gt; '男',
+            'email' =&gt; 'moell@gmail.com'
+        ];
+    }
+
+    /**
+     * 检查指定字段数据是否存在
+     *
+     * @param $offset
+     * @return bool
+     */
+    public function offsetExists($offset)
+    {
+        return isset($this-&gt;data[$offset]);
+    }
+
+    /**
+     * 获取指定字段数据
+     *
+     * @param $offset
+     * @return mixed
+     */
+    public function offsetGet($offset)
+    {
+        return $this-&gt;data[$offset];
+    }
+
+    /**
+     * 设置指定字段数据
+     *
+     * @param $offset
+     * @param $value
+     * @return mixed
+     */
+    public function offsetSet($offset, $value)
+    {
+        return $this-&gt;data[$offset] = $value;
+    }
+
+    /**
+     * 删除指定字段数据
+     *
+     * @param $offset
+     */
+    public function offsetUnset($offset)
+    {
+        unset($this-&gt;data[$offset]);
+    }
+}
+
+$user = new User();
+
+//获取用户的email
+echo $user['email'].PHP_EOL;  // moell@gmail.com
+
+//检查age是否存在
+var_dump(isset($user['age'])); // bool(false)
+
+//设置age
+$user['age'] = 18;
+echo $user['age'].PHP_EOL; //18
+
+//删除age
+unset($user['age']);
+var_dump(isset($user['age'])); // bool(false)
+</code></pre>
+<p>我们的对象可以像数组一样操作了</p>
+<h3 id="实现程序配置化"><strong>实现程序配置化</strong></h3>
+<p><strong>在我们构建应用中，经常会通过一个配置文件变更程序的一个行为，通过 ArrayAccess 我们会更轻松的实现。</strong></p>
+<p>下面我带你们一起看看我是这么实现的</p>
+<ol>
+<li>在项目根目录下创建一个 config 目录</li>
+<li>在 config 目录下创建相应的配置文件，比如 app.php 和 database.php。文件程序如下</li>
+</ol>
+<p>app.php</p>
+<pre><code>&lt;?php
+
+return [
+    'name' =&gt; 'app name',
+    'version' =&gt; 'v1.0.0'
+];
+</code></pre>
+<p>database.php</p>
+<pre><code>&lt;?php
+
+return [
+    'mysql' =&gt; [
+        'host' =&gt; 'localhost',
+        'user' =&gt; 'root',
+        'password' =&gt; '12345678'
+    ]
+];
+</code></pre>
+<ol start="3">
+<li>Config.php 实现 ArrayAccess</li>
+</ol>
+<pre><code>&lt;?php
+
+namespace Config;
+
+class Config implements \ArrayAccess
+{
+    private $config = [];
+
+    private static $instance;
+
+    private $path;
+
+    private function __construct()
+    {
+        $this-&gt;path = __DIR__.&quot;/config/&quot;;
+    }
+
+    public static function instance()
+    {
+        if (!(self::$instance instanceof Config)) {
+            self::$instance = new Config();
+        }
+        return self::$instance;
+    }
+
+    public function offsetExists($offset)
+    {
+        return isset($this-&gt;config[$offset]);
+    }
+
+    public function offsetGet($offset)
+    {
+        if (empty($this-&gt;config[$offset])) {
+            $this-&gt;config[$offset] = require $this-&gt;path.$offset.&quot;.php&quot;;
+        }
+        return $this-&gt;config[$offset];
+    }
+
+    public function offsetSet($offset, $value)
+    {
+        throw new \Exception('不提供设置配置');
+    }
+
+    public function offsetUnset($offset)
+    {
+        throw new \Exception('不提供删除配置');
+    }
+}
+
+$config = Config::instance();
+
+//获取app.php 文件的 name
+echo $config['app']['name'].PHP_EOL; //app name
+
+//获取database.php文件mysql的user配置
+echo $config['database']['mysql']['user'].PHP_EOL; // root
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[JsonSerializable接口的使用]]></title>
+        <id>https://weijianghu.github.io/post/jsonserializable-jie-kou-de-shi-yong/</id>
+        <link href="https://weijianghu.github.io/post/jsonserializable-jie-kou-de-shi-yong/">
+        </link>
+        <updated>2022-08-04T01:35:55.000Z</updated>
+        <content type="html"><![CDATA[<p>Json是Ajax应用中最为通用的数据传输格式(协议), 主流的编程语言都带有对Json的支持, 在PHP中, 有json_encode/json_decode, 可以很方便的构造Json数据格式.</p>
+<pre><code>&lt;?php
+echo json_encode(array(1,2,3,4));
+?&gt;
+//[1,2,3,4]
+</code></pre>
+<p>也可以Json化一个对象:</p>
+<pre><code>&lt;?php
+$o = new stdclass;
+$o-&gt;a = 42;
+echo json_encode($o);
+?&gt;
+//{&quot;a&quot;:42}
+</code></pre>
+<p>但这样就有个问题, 现实生活中的对象是很复杂的, Json的这种默认只对属性做操作的做法有的时候是不能解决问题的, 比如我们希望通过私有成员来做一些计算得到最后的Json化数据, 又或者我们希望用一个字符串来代替一个object.<br>
+在以前, 那你只能自己拼凑Json串了. 不过感谢Sara, 在5.4中, Json新增了一个JsonSerializable接口, 任何实现了这个接口的类, 需要定义一个jsonSerialize()方法, 这个方法会在对这个类的对象做Json化的时候被调用, 这个时候你就可以在这个方法内 , 随意调整最终的Json化的结果:</p>
+<pre><code>&lt;?php
+class JsonTest implements JsonSerializable {
+    private $a, $b;
+    public function __construct($a, $b) {
+        $this-&gt;a = $a;
+        $this-&gt;b = $b;
+    }
+    public function jsonSerialize() {
+        return $this-&gt;a + $this-&gt;b;
+    }
+}
+echo json_encode(new JsonTest(23, 42));
+?&gt;
+//65
+</code></pre>
+<p>下面是个稍微复杂点的例子:</p>
+<pre><code>&lt;?php
+$data = array(
+    new stdClass();
+    new JsonTest(1,2),
+    new JsonTest(3,4),
+    array(5,6)
+);
+echo json_encode($data);
+?&gt;
+//[{},3,7,[5,6]]
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[async 函数]]></title>
+        <id>https://weijianghu.github.io/post/async-han-shu/</id>
+        <link href="https://weijianghu.github.io/post/async-han-shu/">
+        </link>
+        <updated>2022-07-28T07:29:56.000Z</updated>
+        <content type="html"><![CDATA[<p>ES2017 标准引入了 async 函数，使得异步操作变得更加方便。</p>
+<p>async 函数是什么？一句话，它就是 Generator 函数的语法糖。<br>
+<strong>async函数就是将 Generator 函数的星号（*）替换成async，将yield替换成await，仅此而已。</strong><br>
+async函数对 Generator 函数的改进，体现在以下四点。</p>
+<ol>
+<li>内置执行器。</li>
+</ol>
+<p>Generator 函数的执行必须靠执行器，所以才有了co模块，而async函数自带执行器。也就是说，async函数的执行，与普通函数一模一样，只要一行。</p>
+<pre><code>asyncReadFile();
+</code></pre>
+<p>上面的代码调用了asyncReadFile函数，然后它就会自动执行，输出最后结果。这完全不像 Generator 函数，需要调用next方法，或者用co模块，才能真正执行，得到最后结果。</p>
+<ol start="2">
+<li>
+<p>更好的语义。<br>
+async和await，比起星号和yield，语义更清楚了。async表示函数里有异步操作，await表示紧跟在后面的表达式需要等待结果。</p>
+</li>
+<li>
+<p>更广的适用性。<br>
+co模块约定，yield命令后面只能是 Thunk 函数或 Promise 对象，而async函数的await命令后面，可以是 Promise 对象和原始类型的值（数值、字符串和布尔值，但这时会自动转成立即 resolved 的 Promise 对象）。</p>
+</li>
+<li>
+<p>返回值是 Promise。<br>
+async函数的返回值是 Promise 对象，这比 Generator 函数的返回值是 Iterator 对象方便多了。你可以用then方法指定下一步的操作。</p>
+</li>
+</ol>
+<p>进一步说，async函数完全可以看作多个异步操作，包装成的一个 Promise 对象，而await命令就是内部then命令的语法糖。</p>
+<h3 id="基本用法"><strong>基本用法</strong></h3>
+<p>async函数返回一个 Promise 对象，可以使用then方法添加回调函数。当函数执行的时候，一旦遇到await就会先返回，等到异步操作完成，再接着执行函数体内后面的语句。</p>
+<p>下面是一个例子。</p>
+<pre><code>async function getStockPriceByName(name) {
+  const symbol = await getStockSymbol(name);
+  const stockPrice = await getStockPrice(symbol);
+  return stockPrice;
+}
+
+getStockPriceByName('goog').then(function (result) {
+  console.log(result);
+});
+</code></pre>
+<h3 id="语法">语法</h3>
+<p>async函数的语法规则总体上比较简单，难点是错误处理机制。</p>
+<h4 id="返回promise对象">返回promise对象</h4>
+<p>async函数返回一个 Promise 对象。</p>
+<p>async函数内部return语句返回的值，会成为then方法回调函数的参数。</p>
+<pre><code>async function f() {
+  return 'hello world';
+}
+
+f().then(v =&gt; console.log(v))
+// &quot;hello world&quot;
+</code></pre>
+<p>上面代码中，函数f内部return命令返回的值，会被then方法回调函数接收到。</p>
+<p>async函数内部抛出错误，会导致返回的 Promise 对象变为reject状态。抛出的错误对象会被catch方法回调函数接收到。</p>
+<pre><code>async function f() {
+  throw new Error('出错了');
+}
+
+f().then(
+  v =&gt; console.log('resolve', v),
+  e =&gt; console.log('reject', e)
+)
+//reject Error: 出错了
+</code></pre>
+<h3 id="promise对象的状态变化">promise对象的状态变化</h3>
+<p>async函数返回的 Promise 对象，必须等到内部所有await命令后面的 Promise 对象执行完，才会发生状态改变，除非遇到return语句或者抛出错误。也就是说，只有async函数内部的异步操作执行完，才会执行then方法指定的回调函数。</p>
+<pre><code>async function getTitle(url) {
+  let response = await fetch(url);
+  let html = await response.text();
+  return html.match(/&lt;title&gt;([\s\S]+)&lt;\/title&gt;/i)[1];
+}
+getTitle('https://tc39.github.io/ecma262/').then(console.log)
+// &quot;ECMAScript 2017 Language Specification&quot;
+</code></pre>
+<p>上面代码中，函数getTitle内部有三个操作：抓取网页、取出文本、匹配页面标题。只有这三个操作全部完成，才会执行then方法里面的console.log。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[协程说明]]></title>
+        <id>https://weijianghu.github.io/post/xie-cheng-shuo-ming/</id>
+        <link href="https://weijianghu.github.io/post/xie-cheng-shuo-ming/">
+        </link>
+        <updated>2022-07-28T07:09:39.000Z</updated>
+        <content type="html"><![CDATA[<p>协程有点像函数，又有点像线程。它的运行流程大致如下。</p>
+<p>第一步，协程A开始执行。<br>
+第二步，协程A执行到一半，进入暂停，执行权转移到协程B。<br>
+第三步，（一段时间后）协程B交还执行权。<br>
+第四步，协程A恢复执行。<br>
+上面流程的协程A，就是异步任务，因为它分成两段（或多段）执行</p>
+<p>举例来说，读取文件的协程写法如下。</p>
+<pre><code>function* asyncJob() {
+  // ...其他代码
+  var f = yield readFile(fileA);
+  // ...其他代码
+}
+</code></pre>
+<p>上面代码的函数asyncJob是一个协程，它的奥妙就在其中的yield命令。它表示执行到此处，执行权将交给其他协程。也就是说，yield命令是异步两个阶段的分界线。</p>
+<p>协程遇到yield命令就暂停，等到执行权返回，再从暂停的地方继续往后执行。它的最大优点，就是代码的写法非常像同步操作，如果去除yield命令，简直一模一样。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[es6-Generator说明]]></title>
+        <id>https://weijianghu.github.io/post/es6-generator-shuo-ming/</id>
+        <link href="https://weijianghu.github.io/post/es6-generator-shuo-ming/">
+        </link>
+        <updated>2022-07-28T06:32:53.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="定义"><strong>定义</strong></h3>
+<p>执行 Generator 函数会返回一个遍历器对象，也就是说，Generator 函数除了状态机，还是一个遍历器对象生成函数。返回的遍历器对象，可以依次遍历 Generator 函数内部的每一个状态。</p>
+<p>形式上，Generator 函数是一个普通函数，但是有两个特征。一是，function关键字与函数名之间有一个星号；二是，函数体内部使用yield表达式，定义不同的内部状态（yield在英语里的意思就是“产出”）。</p>
+<pre><code>function* helloWorldGenerator() {
+  yield 'hello';
+  yield 'world';
+  return 'ending';
+}
+
+var hw = helloWorldGenerator();
+</code></pre>
+<p>上面代码定义了一个 Generator 函数helloWorldGenerator，它内部有两个yield表达式（hello和world），即该函数有三个状态：hello，world 和 return 语句（结束执行）。</p>
+<p>然后，Generator 函数的调用方法与普通函数一样，也是在函数名后面加上一对圆括号。不同的是，调用 Generator 函数后，该函数并不执行，返回的也不是函数运行结果，而是一个指向内部状态的指针对象，也就是上一章介绍的遍历器对象（Iterator Object）。</p>
+<p>下一步，必须调用遍历器对象的next方法，使得指针移向下一个状态。也就是说，每次调用next方法，内部指针就从函数头部或上一次停下来的地方开始执行，直到遇到下一个yield表达式（或return语句）为止。换言之，Generator 函数是分段执行的，yield表达式是暂停执行的标记，而next方法可以恢复执行</p>
+<pre><code>hw.next()
+// { value: 'hello', done: false }
+
+hw.next()
+// { value: 'world', done: false }
+
+hw.next()
+// { value: 'ending', done: true }
+
+hw.next()
+// { value: undefined, done: true }
+</code></pre>
+<p>上面代码一共调用了四次next方法。</p>
+<p>第一次调用，Generator 函数开始执行，直到遇到第一个yield表达式为止。next方法返回一个对象，它的value属性就是当前yield表达式的值hello，done属性的值false，表示遍历还没有结束。</p>
+<p>第二次调用，Generator 函数从上次yield表达式停下的地方，一直执行到下一个yield表达式。next方法返回的对象的value属性就是当前yield表达式的值world，done属性的值false，表示遍历还没有结束。</p>
+<p>第三次调用，Generator 函数从上次yield表达式停下的地方，一直执行到return语句（如果没有return语句，就执行到函数结束）。next方法返回的对象的value属性，就是紧跟在return语句后面的表达式的值（如果没有return语句，则value属性的值为undefined），done属性的值true，表示遍历已经结束。</p>
+<p>第四次调用，此时 Generator 函数已经运行完毕，next方法返回对象的value属性为undefined，done属性为true。以后再调用next方法，返回的都是这个值。</p>
+<p>总结一下，调用 Generator 函数，返回一个遍历器对象，代表 Generator 函数的内部指针。以后，每次调用遍历器对象的next方法，就会返回一个有着value和done两个属性的对象。value属性表示当前的内部状态的值，是yield表达式后面那个表达式的值；done属性是一个布尔值，表示是否遍历结束</p>
+<p><strong>另外需要注意，yield表达式只能用在 Generator 函数里面，用在其他地方都会报错。</strong></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[markdown语法]]></title>
+        <id>https://weijianghu.github.io/post/markdown-yu-fa/</id>
+        <link href="https://weijianghu.github.io/post/markdown-yu-fa/">
+        </link>
+        <updated>2022-07-28T03:05:55.000Z</updated>
+        <content type="html"><![CDATA[<p><a href="https://markdown.com.cn/cheat-sheet.html#%E5%9F%BA%E6%9C%AC%E8%AF%AD%E6%B3%95">查看语法</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[es6-let,const说明]]></title>
+        <id>https://weijianghu.github.io/post/es6-letconst-shuo-ming/</id>
+        <link href="https://weijianghu.github.io/post/es6-letconst-shuo-ming/">
+        </link>
+        <updated>2022-07-28T02:43:30.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="let说明"><strong>let说明</strong></h3>
+<ul>
+<li>let不存在代码提升，必须先声明后使用</li>
+<li>let有自己的作用域，在作用域之外，此变量无法使用，父级作用域中声明的let同名变量不受子作用域声明的let变量影响</li>
+<li>let变量在同一个作用域内不能重复声明</li>
+</ul>
+<hr>
+<h3 id="const说明"><strong>const说明</strong></h3>
+<ul>
+<li>const声明一个只读的常量。一旦声明，常量的值就不能改变</li>
+<li>const声明的变量不得改变值，这意味着，const一旦声明变量，就必须立即初始化，不能留到以后赋值。</li>
+<li>const的作用域与let命令相同：只在声明所在的块级作用域内有效。</li>
+<li>const命令声明的常量也是不提升，同样存在暂时性死区，只能在声明的位置后面使用。</li>
+<li>const声明的常量，也与let一样不可重复声明。</li>
+</ul>
+<h4 id="const本质"><strong>const本质</strong></h4>
+<p>const实际上保证的，并不是变量的值不得改动，而是变量指向的那个内存地址所保存的数据不得改动。对于简单类型的数据（数值、字符串、布尔值），值就保存在变量指向的那个内存地址，因此等同于常量。但对于复合类型的数据（主要是对象和数组），变量指向的内存地址，保存的只是一个指向实际数据的指针，const只能保证这个指针是固定的（即总是指向另一个固定的地址），至于它指向的数据结构是不是可变的，就完全不能控制了。因此，将一个对象声明为常量必须非常小心。</p>
+<pre><code>const foo = {};
+
+// 为 foo 添加一个属性，可以成功
+foo.prop = 123;
+foo.prop // 123
+
+// 将 foo 指向另一个对象，就会报错
+foo = {}; // TypeError: &quot;foo&quot; is read-only
+</code></pre>
+<p>上面代码中，常量foo储存的是一个地址，这个地址指向一个对象。不可变的只是这个地址，即不能把foo指向另一个地址，但对象本身是可变的，所以依然可以为其添加新属性。</p>
+<p>下面是另一个例子。</p>
+<pre><code>const a = [];
+a.push('Hello'); // 可执行
+a.length = 0;    // 可执行
+a = ['Dave'];    // 报错
+</code></pre>
+<p>上面代码中，常量a是一个数组，这个数组本身是可写的，但是如果将另一个数组赋值给a，就会报错。</p>
+<p>如果真的想将对象冻结，应该使用Object.freeze方法。</p>
+<pre><code>const foo = Object.freeze({});
+
+// 常规模式时，下面一行不起作用；
+// 严格模式时，该行会报错
+foo.prop = 123;
+</code></pre>
+<p>上面代码中，常量foo指向一个冻结的对象，所以添加新属性不起作用，严格模式时还会报错。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[内容居中]]></title>
+        <id>https://weijianghu.github.io/post/nei-rong-ju-zhong/</id>
+        <link href="https://weijianghu.github.io/post/nei-rong-ju-zhong/">
+        </link>
+        <updated>2022-07-27T07:42:02.000Z</updated>
+        <content type="html"><![CDATA[<pre><code>.dwGroup li {
+	width: 18%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* display: inline-block; */
+	font-size: 14px;
+	margin: 15px 2.5% 0 0;
+	text-align: justify;
+	background-color: #0469e0;
+	padding: 0px 10px;
+	height: 50px;
+	border-radius: 10px;
+	text-align: center;
+}
+</code></pre>
+]]></content>
+    </entry>
+</feed>

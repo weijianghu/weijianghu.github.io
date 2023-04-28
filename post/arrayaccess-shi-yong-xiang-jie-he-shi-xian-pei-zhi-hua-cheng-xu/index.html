@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>ArrayAccess 使用详解和实现配置化程序 | Hidea</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://weijianghu.github.io/favicon.ico?v=1682672380349">
+<link rel="stylesheet" href="https://weijianghu.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="简介
+ArrayAccess（数组式访问）接口：提供像访问数组一样访问对象的能力的接口。
+提供接口
+ArrayAccess {
+    //检查一个偏移位置是否存在
+    abstract public boolean offsetExi..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://weijianghu.github.io">
+        <img src="https://weijianghu.github.io/images/avatar.png?v=1682672380349" class="site-logo">
+        <h1 class="site-title">Hidea</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      温故而知新
+    </div>
+    <div class="site-footer">
+      Powered by weijianghu | <a class="rss" href="https://weijianghu.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">ArrayAccess 使用详解和实现配置化程序</h2>
+            <div class="post-date">2022-08-04</div>
+            
+            <div class="post-content" v-pre>
+              <h3 id="简介"><strong>简介</strong></h3>
+<p>ArrayAccess（数组式访问）接口：提供像访问数组一样访问对象的能力的接口。</p>
+<h4 id="提供接口"><strong>提供接口</strong></h4>
+<pre><code>ArrayAccess {
+    //检查一个偏移位置是否存在
+    abstract public boolean offsetExists ( mixed $offset );
+
+    //获取一个偏移位置的值
+    abstract public mixed offsetGet ( mixed $offset );
+
+    //设置一个偏移位置的值
+    abstract public void offsetSet ( mixed $offset , mixed $value );
+
+    //复位一个偏移位置的值
+    abstract public void offsetUnset ( mixed $offset );
+}
+</code></pre>
+<p><strong>如果我们想像数组一样来访问你的 PHP 对象只需要实现 ArrayAccess 接口即可</strong></p>
+<h3 id="实例运用"><strong>实例运用</strong></h3>
+<p>场景：假如我有一个 User 类，映射的是用户的信息，想通过数组的方式来访问和设置用户信息</p>
+<pre><code>&lt;?php
+/**
+ * Created by PhpStorm.
+ * User: moell
+ * Date: 16-10-30
+ * Time: 下午8:49
+ */
+
+namespace User;
+
+class User implements \ArrayAccess
+{
+    private $data = [];
+
+    public function __construct()
+    {
+        $this-&gt;data =  [
+            'name' =&gt; 'moell',
+            'sex' =&gt; '男',
+            'email' =&gt; 'moell@gmail.com'
+        ];
+    }
+
+    /**
+     * 检查指定字段数据是否存在
+     *
+     * @param $offset
+     * @return bool
+     */
+    public function offsetExists($offset)
+    {
+        return isset($this-&gt;data[$offset]);
+    }
+
+    /**
+     * 获取指定字段数据
+     *
+     * @param $offset
+     * @return mixed
+     */
+    public function offsetGet($offset)
+    {
+        return $this-&gt;data[$offset];
+    }
+
+    /**
+     * 设置指定字段数据
+     *
+     * @param $offset
+     * @param $value
+     * @return mixed
+     */
+    public function offsetSet($offset, $value)
+    {
+        return $this-&gt;data[$offset] = $value;
+    }
+
+    /**
+     * 删除指定字段数据
+     *
+     * @param $offset
+     */
+    public function offsetUnset($offset)
+    {
+        unset($this-&gt;data[$offset]);
+    }
+}
+
+$user = new User();
+
+//获取用户的email
+echo $user['email'].PHP_EOL;  // moell@gmail.com
+
+//检查age是否存在
+var_dump(isset($user['age'])); // bool(false)
+
+//设置age
+$user['age'] = 18;
+echo $user['age'].PHP_EOL; //18
+
+//删除age
+unset($user['age']);
+var_dump(isset($user['age'])); // bool(false)
+</code></pre>
+<p>我们的对象可以像数组一样操作了</p>
+<h3 id="实现程序配置化"><strong>实现程序配置化</strong></h3>
+<p><strong>在我们构建应用中，经常会通过一个配置文件变更程序的一个行为，通过 ArrayAccess 我们会更轻松的实现。</strong></p>
+<p>下面我带你们一起看看我是这么实现的</p>
+<ol>
+<li>在项目根目录下创建一个 config 目录</li>
+<li>在 config 目录下创建相应的配置文件，比如 app.php 和 database.php。文件程序如下</li>
+</ol>
+<p>app.php</p>
+<pre><code>&lt;?php
+
+return [
+    'name' =&gt; 'app name',
+    'version' =&gt; 'v1.0.0'
+];
+</code></pre>
+<p>database.php</p>
+<pre><code>&lt;?php
+
+return [
+    'mysql' =&gt; [
+        'host' =&gt; 'localhost',
+        'user' =&gt; 'root',
+        'password' =&gt; '12345678'
+    ]
+];
+</code></pre>
+<ol start="3">
+<li>Config.php 实现 ArrayAccess</li>
+</ol>
+<pre><code>&lt;?php
+
+namespace Config;
+
+class Config implements \ArrayAccess
+{
+    private $config = [];
+
+    private static $instance;
+
+    private $path;
+
+    private function __construct()
+    {
+        $this-&gt;path = __DIR__.&quot;/config/&quot;;
+    }
+
+    public static function instance()
+    {
+        if (!(self::$instance instanceof Config)) {
+            self::$instance = new Config();
+        }
+        return self::$instance;
+    }
+
+    public function offsetExists($offset)
+    {
+        return isset($this-&gt;config[$offset]);
+    }
+
+    public function offsetGet($offset)
+    {
+        if (empty($this-&gt;config[$offset])) {
+            $this-&gt;config[$offset] = require $this-&gt;path.$offset.&quot;.php&quot;;
+        }
+        return $this-&gt;config[$offset];
+    }
+
+    public function offsetSet($offset, $value)
+    {
+        throw new \Exception('不提供设置配置');
+    }
+
+    public function offsetUnset($offset)
+    {
+        throw new \Exception('不提供删除配置');
+    }
+}
+
+$config = Config::instance();
+
+//获取app.php 文件的 name
+echo $config['app']['name'].PHP_EOL; //app name
+
+//获取database.php文件mysql的user配置
+echo $config['database']['mysql']['user'].PHP_EOL; // root
+</code></pre>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://weijianghu.github.io/post/jsonserializable-jie-kou-de-shi-yong/">
+                  <h3 class="post-title">
+                    JsonSerializable接口的使用
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>

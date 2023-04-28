@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>php中jwt使用过程 | Hidea</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://weijianghu.github.io/favicon.ico?v=1682672380349">
+<link rel="stylesheet" href="https://weijianghu.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="整体使用流程：
+
+
+用户登录
+
+
+后端通过jwt生成此用户的token
+
+
+回传token到前端
+
+
+前端存储token
+
+
+每次前端到后端的请求都要带着此token,可以指定前置路由中间件判断
+
+
+后端验证前端带过来的token，如果合法..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://weijianghu.github.io">
+        <img src="https://weijianghu.github.io/images/avatar.png?v=1682672380349" class="site-logo">
+        <h1 class="site-title">Hidea</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      温故而知新
+    </div>
+    <div class="site-footer">
+      Powered by weijianghu | <a class="rss" href="https://weijianghu.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">php中jwt使用过程</h2>
+            <div class="post-date">2022-08-17</div>
+            
+            <div class="post-content" v-pre>
+              <p>整体使用流程：</p>
+<ol>
+<li>
+<h3 id="用户登录"><strong>用户登录</strong></h3>
+</li>
+<li>
+<h3 id="后端通过jwt生成此用户的token"><strong>后端通过jwt生成此用户的token</strong></h3>
+</li>
+<li>
+<h3 id="回传token到前端"><strong>回传token到前端</strong></h3>
+</li>
+<li>
+<h3 id="前端存储token"><strong>前端存储token</strong></h3>
+</li>
+<li>
+<h3 id="每次前端到后端的请求都要带着此token可以指定前置路由中间件判断"><strong>每次前端到后端的请求都要带着此token,可以指定前置路由中间件判断</strong></h3>
+</li>
+<li>
+<h3 id="后端验证前端带过来的token如果合法就继续如果不合法报错"><strong>后端验证前端带过来的token，如果合法，就继续，如果不合法，报错</strong></h3>
+</li>
+</ol>
+<p>先说一下jwt的基本知识<br>
+<img src="https://picabstract-preview-ftn.weiyun.com/ftn_pic_abs_v3/0affd67b4e4214028adb1d91862ca06c567e626ccd8fda2f4a8a172f8b794af9ecf022dc10d4cc3a9f65b274b5efed92?pictype=scale&amp;from=30113&amp;version=3.3.3.3&amp;fname=FireShot%20Capture%20004%20-%20JSON%20Web%20Token%20%E5%85%A5%E9%97%A8%E6%95%99%E7%A8%8B%20-%20%E9%98%AE%E4%B8%80%E5%B3%B0%E7%9A%84%E7%BD%91%E7%BB%9C%E6%97%A5%E5%BF%97%20-%20www.ruanyifeng.com.png&amp;size=750" alt="" loading="lazy"></p>
+<p>下面详细讲解一下使用过程(实例以thinkphp6.0作为基本框架)</p>
+<h3 id="文件列表"><strong>文件列表</strong></h3>
+<ol>
+<li>JwtAuthModelTrait.php #负责生成和解析用户的jwt</li>
+<li>UserToken.php #负责把1中生成的token存储到数据库等操作</li>
+<li>AuthTokenMiddleware #中间件，用来判断token有效性</li>
+<li>UserRepository.php #辅助类，用来协助3，判断token有效性</li>
+</ol>
+<p>代码如下：</p>
+<pre><code>JwtAuthModelTrait.php
+&lt;?php
+namespace crmeb\traits;
+
+use Firebase\JWT\BeforeValidException;
+use Firebase\JWT\ExpiredException;
+use Firebase\JWT\JWT;
+use Firebase\JWT\SignatureInvalidException;
+use think\facade\Config;
+use UnexpectedValueException;
+
+trait JwtAuthModelTrait
+{
+    /**
+     * @param string $type
+     * @param array $params
+     * @return array
+     */
+    public function getToken(string $type, array $params = []): array
+    {
+        $id = $this-&gt;{$this-&gt;getPk()};
+        $host = app()-&gt;request-&gt;host();
+        $time = time();
+
+        $params += [
+            'iss' =&gt; $host,
+            'aud' =&gt; $host,
+            'iat' =&gt; $time,
+            'nbf' =&gt; $time,
+            'exp' =&gt; strtotime('+ 30day'),
+        ];
+        $params['jti'] = compact('id', 'type');
+        $token = JWT::encode($params, Config::get('app.app_key', 'default'));
+
+        return compact('token', 'params');
+    }
+
+    /**
+     * @param string $jwt
+     * @return array
+     *
+     * @throws UnexpectedValueException     Provided JWT was invalid
+     * @throws SignatureInvalidException    Provided JWT was invalid because the signature verification failed
+     * @throws BeforeValidException         Provided JWT is trying to be used before it's eligible as defined by 'nbf'
+     * @throws BeforeValidException         Provided JWT is trying to be used before it's been created as defined by 'iat'
+     * @throws ExpiredException             Provided JWT has since expired, as defined by the 'exp' claim
+     *
+     */
+    public static function parseToken(string $jwt): array
+    {
+        JWT::$leeway = 60;
+
+        $data = JWT::decode($jwt, Config::get('app.app_key', 'default'), array('HS256'));
+
+        $model = new self();
+        return [$model-&gt;where($model-&gt;getPk(), $data-&gt;jti-&gt;id)-&gt;find(), $data-&gt;jti-&gt;type];
+    }
+}
+</code></pre>
+<pre><code>UserToken.php
+&lt;?php
+
+
+namespace app\models\user;
+
+
+use think\Model;
+
+class UserToken extends Model
+{
+    protected $name = 'user_token';
+
+    protected $type = [
+        'create_time' =&gt; 'datetime',
+        'login_ip' =&gt; 'string'
+    ];
+
+    protected $autoWriteTimestamp = true;
+
+    protected $updateTime = false;
+
+    public static function onBeforeInsert(UserToken $token)
+    {
+        if (!isset($token['login_ip']))
+            $token['login_ip'] = app()-&gt;request-&gt;ip();
+    }
+
+    /**
+     * 创建token并且保存
+     * @param User $user
+     * @param $type
+     * @return UserToken
+     */
+    public static function createToken(User $user, $type): self
+    {
+        $tokenInfo = $user-&gt;getToken($type);
+        return self::create([
+            'uid' =&gt; $user-&gt;uid,
+            'token' =&gt; $tokenInfo['token'],
+            'expires_time' =&gt; date('Y-m-d H:i:s', $tokenInfo['params']['exp'])
+        ]);
+    }
+
+    /**
+     * 删除一天前的过期token
+     * @return bool
+     * @throws \Exception
+     */
+    public static function delToken()
+    {
+        return self::where('expires_time', '&lt;', date('Y-m-d H:i:s',strtotime('-1 day')))-&gt;delete();
+    }
+}
+</code></pre>
+<pre><code>AuthTokenMiddleware.php
+&lt;?php
+
+
+namespace app\http\middleware;
+
+
+use app\models\user\User;
+use app\models\user\UserToken;
+use app\Request;
+use crmeb\exceptions\AuthException;
+use crmeb\interfaces\MiddlewareInterface;
+use crmeb\repositories\UserRepository;
+use think\db\exception\DataNotFoundException;
+use think\db\exception\ModelNotFoundException;
+use think\exception\DbException;
+
+/**
+ * token验证中间件
+ * Class AuthTokenMiddleware
+ * @package app\http\middleware
+ */
+class AuthTokenMiddleware implements MiddlewareInterface
+{
+    public function handle(Request $request, \Closure $next, bool $force = true)
+    {
+        $authInfo = null;
+        $token = trim(ltrim($request-&gt;header('Authori-zation'), 'Bearer'));
+        if(!$token)  $token = trim(ltrim($request-&gt;header('Authorization'), 'Bearer'));//正式版，删除此行，某些服务器无法获取到token调整为 Authori-zation
+        try {
+            $authInfo = UserRepository::parseToken($token);
+        } catch (AuthException $e) {
+            if ($force)
+                return app('json')-&gt;make($e-&gt;getCode(), $e-&gt;getMessage());
+        }
+
+        if (!is_null($authInfo)) {
+            Request::macro('user', function () use (&amp;$authInfo) {
+                return $authInfo['user'];
+            });
+            Request::macro('tokenData', function () use (&amp;$authInfo) {
+                return $authInfo['tokenData'];
+            });
+        }
+        Request::macro('isLogin', function () use (&amp;$authInfo) {
+            return !is_null($authInfo);
+        });
+        Request::macro('uid', function () use (&amp;$authInfo) {
+            return is_null($authInfo) ? 0 : $authInfo['user']-&gt;uid;
+        });
+
+        return $next($request);
+    }
+}
+</code></pre>
+<pre><code>&lt;?php
+UserRepository.php
+namespace crmeb\repositories;
+
+use app\admin\model\system\SystemAttachment;
+use app\models\user\User;
+use app\models\user\UserAddress;
+use app\models\user\UserToken;
+use crmeb\exceptions\AuthException;
+use think\db\exception\ModelNotFoundException;
+use think\db\exception\DataNotFoundException;
+use think\exception\DbException;
+
+/**
+ * Class UserRepository
+ * @package crmeb\repositories
+ */
+class UserRepository
+{
+    /**
+     * 获取授权信息
+     * @param string $token
+     * @return array
+     * @throws AuthException
+     * @throws DataNotFoundException
+     * @throws DbException
+     * @throws ModelNotFoundException
+     */
+    public static function parseToken($token): array
+    {
+        if (!$token || !$tokenData = UserToken::where('token', $token)-&gt;find())
+            throw new AuthException('请登录', 410000);
+        try {
+            [$user, $type] = User::parseToken($token);
+        } catch (\Throwable $e) {
+            $tokenData-&gt;delete();
+            throw new AuthException('登录已过期,请重新登录', 410001);
+        }
+
+        if (!$user || $user-&gt;uid != $tokenData-&gt;uid) {
+            $tokenData-&gt;delete();
+            throw new AuthException('登录状态有误,请重新登录', 410002);
+        }
+        $tokenData-&gt;type = $type;
+        return compact('user', 'tokenData');
+    }
+}
+</code></pre>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://weijianghu.github.io/post/kua-yu-zi-yuan-gong-xiang-cors-xiang-jie/">
+                  <h3 class="post-title">
+                    跨域资源共享 CORS 详解
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>

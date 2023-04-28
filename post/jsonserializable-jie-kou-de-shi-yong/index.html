@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>JsonSerializable接口的使用 | Hidea</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://weijianghu.github.io/favicon.ico?v=1682672380349">
+<link rel="stylesheet" href="https://weijianghu.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="Json是Ajax应用中最为通用的数据传输格式(协议), 主流的编程语言都带有对Json的支持, 在PHP中, 有json_encode/json_decode, 可以很方便的构造Json数据格式.
+&lt;?php
+echo json_e..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://weijianghu.github.io">
+        <img src="https://weijianghu.github.io/images/avatar.png?v=1682672380349" class="site-logo">
+        <h1 class="site-title">Hidea</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      温故而知新
+    </div>
+    <div class="site-footer">
+      Powered by weijianghu | <a class="rss" href="https://weijianghu.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">JsonSerializable接口的使用</h2>
+            <div class="post-date">2022-08-04</div>
+            
+            <div class="post-content" v-pre>
+              <p>Json是Ajax应用中最为通用的数据传输格式(协议), 主流的编程语言都带有对Json的支持, 在PHP中, 有json_encode/json_decode, 可以很方便的构造Json数据格式.</p>
+<pre><code>&lt;?php
+echo json_encode(array(1,2,3,4));
+?&gt;
+//[1,2,3,4]
+</code></pre>
+<p>也可以Json化一个对象:</p>
+<pre><code>&lt;?php
+$o = new stdclass;
+$o-&gt;a = 42;
+echo json_encode($o);
+?&gt;
+//{&quot;a&quot;:42}
+</code></pre>
+<p>但这样就有个问题, 现实生活中的对象是很复杂的, Json的这种默认只对属性做操作的做法有的时候是不能解决问题的, 比如我们希望通过私有成员来做一些计算得到最后的Json化数据, 又或者我们希望用一个字符串来代替一个object.<br>
+在以前, 那你只能自己拼凑Json串了. 不过感谢Sara, 在5.4中, Json新增了一个JsonSerializable接口, 任何实现了这个接口的类, 需要定义一个jsonSerialize()方法, 这个方法会在对这个类的对象做Json化的时候被调用, 这个时候你就可以在这个方法内 , 随意调整最终的Json化的结果:</p>
+<pre><code>&lt;?php
+class JsonTest implements JsonSerializable {
+    private $a, $b;
+    public function __construct($a, $b) {
+        $this-&gt;a = $a;
+        $this-&gt;b = $b;
+    }
+    public function jsonSerialize() {
+        return $this-&gt;a + $this-&gt;b;
+    }
+}
+echo json_encode(new JsonTest(23, 42));
+?&gt;
+//65
+</code></pre>
+<p>下面是个稍微复杂点的例子:</p>
+<pre><code>&lt;?php
+$data = array(
+    new stdClass();
+    new JsonTest(1,2),
+    new JsonTest(3,4),
+    array(5,6)
+);
+echo json_encode($data);
+?&gt;
+//[{},3,7,[5,6]]
+</code></pre>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://weijianghu.github.io/post/async-han-shu/">
+                  <h3 class="post-title">
+                    async 函数
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>
